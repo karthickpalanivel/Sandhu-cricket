@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -7,10 +7,8 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  StatusBar,
   KeyboardAvoidingView,
   Platform,
-  PanResponder,
   Dimensions,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -23,21 +21,12 @@ import {
   Check,
   Settings2,
   ShieldAlert,
+  Sun,
+  Moon,
 } from "lucide-react-native";
+import { useTheme } from "../context/ThemeContext"; // Import Context
 
 const { width } = Dimensions.get("window");
-
-// --- THEME CONSTANTS ---
-const THEME = {
-  bg: "#0f172a", // Slate 900
-  card: "#1e293b", // Slate 800
-  input: "#334155", // Slate 700
-  text: "#f8fafc", // Slate 50
-  subText: "#94a3b8", // Slate 400
-  accent: "#10b981", // Emerald 500
-  border: "#334155", // Slate 700
-  danger: "#ef4444",
-};
 
 // --- EXTRAS OPTIONS ---
 const EXTRA_OPTIONS = [
@@ -47,31 +36,31 @@ const EXTRA_OPTIONS = [
 ];
 
 const SetupScreen = ({ navigation }) => {
+  // --- THEME HOOK ---
+  const { theme, toggleTheme, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   // --- STATE ---
-  const [presetMode, setPresetMode] = useState("custom"); // 'default', 'previous', 'custom'
+  const [presetMode, setPresetMode] = useState("custom");
 
   // Rules State
   const [teamA, setTeamA] = useState("");
   const [teamB, setTeamB] = useState("");
   const [overs, setOvers] = useState(5);
 
-  // "runs", "ball", or "both"
   const [wideSetting, setWideSetting] = useState("both");
   const [noBallSetting, setNoBallSetting] = useState("both");
 
-  // UI State for Accordions
   const [showWideOptions, setShowWideOptions] = useState(false);
   const [showNoBallOptions, setShowNoBallOptions] = useState(false);
 
   // --- LIFECYCLE ---
   useEffect(() => {
-    // Determine behavior based on preset
     if (presetMode === "default") {
       applyDefaultRules();
     } else if (presetMode === "previous") {
       loadPreviousRules();
     }
-    // 'custom' leaves state as is (editable)
   }, [presetMode]);
 
   // --- LOGIC ---
@@ -79,7 +68,6 @@ const SetupScreen = ({ navigation }) => {
     setOvers(5);
     setWideSetting("both");
     setNoBallSetting("both");
-    // We don't clear names in default, just rules
   };
 
   const loadPreviousRules = async () => {
@@ -91,12 +79,11 @@ const SetupScreen = ({ navigation }) => {
         setTeamB(rules.teamB);
         setOvers(rules.totalOvers);
 
-        // Map back storage object to UI ID
         const mapExtraToId = (extra) => {
           if (extra.runs > 0 && extra.reball) return "both";
           if (extra.runs > 0 && !extra.reball) return "runs";
           if (extra.reball && extra.runs === 0) return "ball";
-          return "both"; // Fallback
+          return "both";
         };
 
         setWideSetting(mapExtraToId(rules.extras.wide));
@@ -112,15 +99,12 @@ const SetupScreen = ({ navigation }) => {
   };
 
   const handleStartMatch = async () => {
-    // 1. Finalize Names
     const finalTeamA = teamA.trim() || "Team A";
     const finalTeamB = teamB.trim() || "Team B";
 
-    // 2. Get Rules from IDs
     const wideRule = EXTRA_OPTIONS.find((o) => o.id === wideSetting);
     const noBallRule = EXTRA_OPTIONS.find((o) => o.id === noBallSetting);
 
-    // 3. Construct Object
     const matchRules = {
       matchId: Date.now().toString(),
       teamA: finalTeamA,
@@ -146,20 +130,14 @@ const SetupScreen = ({ navigation }) => {
     };
 
     try {
-      // 4. Save & Navigate
-      await AsyncStorage.setItem("match_rules", JSON.stringify(matchRules)); // Current Match
+      await AsyncStorage.setItem("match_rules", JSON.stringify(matchRules));
       await AsyncStorage.setItem(
         "last_match_rules",
         JSON.stringify(matchRules)
-      ); // History
-
-      console.log("Match Started:", matchRules);
+      );
 
       if (navigation) {
-        // Navigating to the next phase
         navigation.replace("Scorecard", { rules: matchRules });
-      } else {
-        Alert.alert("Phase 3 Done", "Rules Saved! Ready for Scorecard.");
       }
     } catch (error) {
       Alert.alert("Error", "Could not save match setup.");
@@ -168,18 +146,13 @@ const SetupScreen = ({ navigation }) => {
 
   // --- CUSTOM COMPONENTS ---
 
-  // 1. Custom Slider Component (Visual & Touch)
   const CustomSlider = ({ value, onValueChange, max = 20 }) => {
-    const trackRef = useRef(null);
-
     const handleTouch = (evt) => {
       const locationX = evt.nativeEvent.locationX;
-      // Assume track width is roughly screen width - padding (approx 300-350)
-      // Ideally we measure onLayout, but for simplicity in this specific layout:
-      const trackWidth = width - 80; // Padding 24*2 + internal padding
+      const trackWidth = width - 80;
       const percentage = Math.max(0, Math.min(1, locationX / trackWidth));
       const newValue = Math.round(percentage * max);
-      onValueChange(newValue === 0 ? 1 : newValue); // Min 1 over
+      onValueChange(newValue === 0 ? 1 : newValue);
     };
 
     const fillPercent = (value / max) * 100;
@@ -208,7 +181,6 @@ const SetupScreen = ({ navigation }) => {
     );
   };
 
-  // 2. Custom Dropdown Item
   const DropdownSelector = ({ label, value, isOpen, onToggle, onSelect }) => {
     const selectedOption = EXTRA_OPTIONS.find((o) => o.id === value);
 
@@ -222,9 +194,9 @@ const SetupScreen = ({ navigation }) => {
         >
           <Text style={styles.dropdownValue}>{selectedOption?.label}</Text>
           {isOpen ? (
-            <ChevronUp size={16} color={THEME.accent} />
+            <ChevronUp size={16} color={theme.accent} />
           ) : (
-            <ChevronDown size={16} color={THEME.subText} />
+            <ChevronDown size={16} color={theme.subText} />
           )}
         </TouchableOpacity>
 
@@ -247,7 +219,7 @@ const SetupScreen = ({ navigation }) => {
                 >
                   {opt.label}
                 </Text>
-                {value === opt.id && <Check size={14} color={THEME.bg} />}
+                {value === opt.id && <Check size={14} color={theme.bg} />}
               </TouchableOpacity>
             ))}
           </View>
@@ -258,19 +230,28 @@ const SetupScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.bg} />
-
       {/* HEADER */}
       <View style={styles.header}>
-        <View style={styles.headerIcon}>
-          <Settings2 size={24} color={THEME.accent} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+          <View style={styles.headerIcon}>
+            <Settings2 size={24} color={theme.accent} />
+          </View>
+          <View>
+            <Text style={styles.headerTitle}>Match Rules</Text>
+            <Text style={styles.headerSubtitle}>
+              Configure your game settings
+            </Text>
+          </View>
         </View>
-        <View>
-          <Text style={styles.headerTitle}>Match Rules</Text>
-          <Text style={styles.headerSubtitle}>
-            Configure your game settings
-          </Text>
-        </View>
+
+        {/* THEME TOGGLE */}
+        <TouchableOpacity style={styles.themeToggle} onPress={toggleTheme}>
+          {isDark ? (
+            <Sun size={24} color={theme.text} />
+          ) : (
+            <Moon size={24} color={theme.text} />
+          )}
+        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -307,14 +288,14 @@ const SetupScreen = ({ navigation }) => {
           {/* CARD 1: TEAMS */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Users size={18} color={THEME.accent} />
+              <Users size={18} color={theme.accent} />
               <Text style={styles.cardTitle}>Teams</Text>
             </View>
             <View style={styles.teamInputContainer}>
               <TextInput
                 style={styles.teamInput}
                 placeholder="Team A (Default)"
-                placeholderTextColor={THEME.subText}
+                placeholderTextColor={theme.subText}
                 value={teamA}
                 onChangeText={setTeamA}
               />
@@ -324,7 +305,7 @@ const SetupScreen = ({ navigation }) => {
               <TextInput
                 style={styles.teamInput}
                 placeholder="Team B (Default)"
-                placeholderTextColor={THEME.subText}
+                placeholderTextColor={theme.subText}
                 value={teamB}
                 onChangeText={setTeamB}
               />
@@ -334,7 +315,7 @@ const SetupScreen = ({ navigation }) => {
           {/* CARD 2: OVERS */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Clock size={18} color={THEME.accent} />
+              <Clock size={18} color={theme.accent} />
               <Text style={styles.cardTitle}>Overs Limit</Text>
               <Text style={styles.oversDisplay}>{overs}</Text>
             </View>
@@ -351,7 +332,7 @@ const SetupScreen = ({ navigation }) => {
           {/* CARD 3: EXTRAS RULES */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <ShieldAlert size={18} color={THEME.accent} />
+              <ShieldAlert size={18} color={theme.accent} />
               <Text style={styles.cardTitle}>Extras Configuration</Text>
             </View>
 
@@ -398,194 +379,201 @@ const SetupScreen = ({ navigation }) => {
           activeOpacity={0.8}
         >
           <Text style={styles.startBtnText}>START MATCH</Text>
-          <Play size={20} color={THEME.bg} fill={THEME.bg} />
+          <Play size={20} color={theme.bg} fill={theme.bg} />
         </TouchableOpacity>
       </View>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: THEME.bg },
+// --- DYNAMIC STYLES GENERATOR ---
+const createStyles = (theme) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.bg },
 
-  // Header
-  header: {
-    paddingTop: 60,
-    paddingBottom: 20,
-    paddingHorizontal: 24,
-    backgroundColor: THEME.bg,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  headerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: THEME.card,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: THEME.border,
-  },
-  headerTitle: { fontSize: 22, fontWeight: "800", color: THEME.text },
-  headerSubtitle: { fontSize: 13, color: THEME.subText },
+    header: {
+      paddingTop: 60,
+      paddingBottom: 20,
+      paddingHorizontal: 24,
+      backgroundColor: theme.bg,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between", // Changed for Toggle
+    },
+    headerIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 12,
+      backgroundColor: theme.card,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    headerTitle: { fontSize: 22, fontWeight: "800", color: theme.text },
+    headerSubtitle: { fontSize: 13, color: theme.subText },
 
-  scrollContent: { padding: 20, paddingBottom: 100 },
+    themeToggle: {
+      padding: 8,
+      backgroundColor: theme.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
 
-  // Preset Tabs
-  presetRow: {
-    flexDirection: "row",
-    backgroundColor: THEME.card,
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 24,
-  },
-  presetBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: "center",
-    borderRadius: 8,
-  },
-  presetBtnActive: { backgroundColor: THEME.accent },
-  presetText: { fontSize: 11, fontWeight: "700", color: THEME.subText },
-  presetTextActive: { color: THEME.bg },
+    scrollContent: { padding: 20, paddingBottom: 100 },
 
-  // Cards
-  card: {
-    backgroundColor: THEME.card,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: THEME.border,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 16,
-  },
-  cardTitle: { color: THEME.text, fontSize: 16, fontWeight: "700", flex: 1 },
+    presetRow: {
+      flexDirection: "row",
+      backgroundColor: theme.card,
+      borderRadius: 12,
+      padding: 4,
+      marginBottom: 24,
+    },
+    presetBtn: {
+      flex: 1,
+      paddingVertical: 10,
+      alignItems: "center",
+      borderRadius: 8,
+    },
+    presetBtnActive: { backgroundColor: theme.accent },
+    presetText: { fontSize: 11, fontWeight: "700", color: theme.subText },
+    presetTextActive: { color: theme.bg },
 
-  // Teams
-  teamInputContainer: { flexDirection: "row", alignItems: "center", gap: 8 },
-  teamInput: {
-    flex: 1,
-    backgroundColor: THEME.input,
-    height: 48,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    color: "#fff",
-    fontSize: 14,
-    textAlign: "center",
-  },
-  vsBadge: { width: 24, alignItems: "center" },
-  vsText: { color: THEME.subText, fontSize: 10, fontWeight: "900" },
+    card: {
+      backgroundColor: theme.card,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    cardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 16,
+    },
+    cardTitle: { color: theme.text, fontSize: 16, fontWeight: "700", flex: 1 },
 
-  // Slider UI
-  oversDisplay: { fontSize: 18, fontWeight: "bold", color: THEME.accent },
-  sliderContainer: { height: 40, justifyContent: "center" },
-  sliderTrack: {
-    height: 6,
-    backgroundColor: THEME.input,
-    borderRadius: 3,
-    width: "100%",
-  },
-  sliderFill: { height: 6, backgroundColor: THEME.accent, borderRadius: 3 },
-  sliderThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#fff",
-    position: "absolute",
-    top: 8,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOpacity: 0.3,
-  },
-  sliderLabels: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 12,
-  },
-  sliderLabelText: { color: THEME.subText, fontSize: 10 },
-  helperText: {
-    color: THEME.subText,
-    fontSize: 11,
-    marginTop: 12,
-    fontStyle: "italic",
-    textAlign: "center",
-  },
+    teamInputContainer: { flexDirection: "row", alignItems: "center", gap: 8 },
+    teamInput: {
+      flex: 1,
+      backgroundColor: theme.input,
+      height: 48,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      color: theme.mode === "light" ? theme.text : "#fff", // Input text color fix
+      fontSize: 14,
+      textAlign: "center",
+    },
+    vsBadge: { width: 24, alignItems: "center" },
+    vsText: { color: theme.subText, fontSize: 10, fontWeight: "900" },
 
-  // Dropdowns
-  dropdownContainer: { marginBottom: 4, position: "relative", zIndex: 10 },
-  dropdownLabel: {
-    color: THEME.subText,
-    fontSize: 11,
-    marginBottom: 6,
-    fontWeight: "600",
-  },
-  dropdownTrigger: {
-    backgroundColor: THEME.input,
-    borderRadius: 10,
-    padding: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  dropdownValue: { color: "#fff", fontSize: 14, fontWeight: "500" },
-  dropdownMenu: {
-    backgroundColor: THEME.card,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: THEME.accent,
-    marginTop: 6,
-    overflow: "hidden",
-  },
-  dropdownItem: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.border,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  dropdownItemActive: { backgroundColor: THEME.accent },
-  dropdownItemText: { color: THEME.subText, fontSize: 13 },
-  dropdownItemTextActive: { color: THEME.bg, fontWeight: "700" },
-  divider: { height: 1, backgroundColor: THEME.border, marginVertical: 12 },
+    oversDisplay: { fontSize: 18, fontWeight: "bold", color: theme.accent },
+    sliderContainer: { height: 40, justifyContent: "center" },
+    sliderTrack: {
+      height: 6,
+      backgroundColor: theme.input,
+      borderRadius: 3,
+      width: "100%",
+    },
+    sliderFill: { height: 6, backgroundColor: theme.accent, borderRadius: 3 },
+    sliderThumb: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: "#fff",
+      position: "absolute",
+      top: 8,
+      elevation: 5,
+      shadowColor: "#000",
+      shadowOpacity: 0.3,
+    },
+    sliderLabels: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginTop: 12,
+    },
+    sliderLabelText: { color: theme.subText, fontSize: 10 },
+    helperText: {
+      color: theme.subText,
+      fontSize: 11,
+      marginTop: 12,
+      fontStyle: "italic",
+      textAlign: "center",
+    },
 
-  // Footer
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 24,
-    paddingBottom: 36,
-    backgroundColor: THEME.bg,
-    borderTopWidth: 1,
-    borderTopColor: THEME.border,
-  },
-  startBtn: {
-    backgroundColor: THEME.accent,
-    height: 56,
-    borderRadius: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    elevation: 8,
-    shadowColor: THEME.accent,
-    shadowOpacity: 0.4,
-  },
-  startBtnText: {
-    color: THEME.bg,
-    fontWeight: "900",
-    fontSize: 16,
-    letterSpacing: 1,
-  },
-});
+    dropdownContainer: { marginBottom: 4, position: "relative", zIndex: 10 },
+    dropdownLabel: {
+      color: theme.subText,
+      fontSize: 11,
+      marginBottom: 6,
+      fontWeight: "600",
+    },
+    dropdownTrigger: {
+      backgroundColor: theme.input,
+      borderRadius: 10,
+      padding: 12,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    dropdownValue: {
+      color: theme.mode === "light" ? theme.text : "#fff",
+      fontSize: 14,
+      fontWeight: "500",
+    },
+    dropdownMenu: {
+      backgroundColor: theme.card,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: theme.accent,
+      marginTop: 6,
+      overflow: "hidden",
+    },
+    dropdownItem: {
+      padding: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    dropdownItemActive: { backgroundColor: theme.accent },
+    dropdownItemText: { color: theme.subText, fontSize: 13 },
+    dropdownItemTextActive: { color: theme.bg, fontWeight: "700" },
+    divider: { height: 1, backgroundColor: theme.border, marginVertical: 12 },
+
+    footer: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      padding: 24,
+      paddingBottom: 36,
+      backgroundColor: theme.bg,
+      borderTopWidth: 1,
+      borderTopColor: theme.border,
+    },
+    startBtn: {
+      backgroundColor: theme.accent,
+      height: 56,
+      borderRadius: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      elevation: 8,
+      shadowColor: theme.accent,
+      shadowOpacity: 0.4,
+    },
+    startBtnText: {
+      color: theme.bg,
+      fontWeight: "900",
+      fontSize: 16,
+      letterSpacing: 1,
+    },
+  });
 
 export default SetupScreen;
