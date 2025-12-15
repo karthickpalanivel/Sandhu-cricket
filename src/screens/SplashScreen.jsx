@@ -78,7 +78,7 @@ const SplashScreen = ({ onFinish, navigation }) => {
         {/* Title */}
         <View style={styles.textContainer}>
           <Text style={styles.title}>
-            CRIC<Text style={styles.highlight}>SCORER</Text>
+            SANDHU<Text style={styles.highlight}>CRICKET</Text>
           </Text>
           <Text style={styles.subtitle}>A Palanivel Jr. Product</Text>
         </View>
